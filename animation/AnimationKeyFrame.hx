@@ -1,6 +1,7 @@
 package animation;
 import flixel.FlxG;
 import flixel.FlxSprite;
+import flixel.group.FlxSpriteGroup;
 import flixel.math.FlxAngle;
 import flixel.math.FlxMath;
 import flixel.math.FlxMatrix;
@@ -49,7 +50,7 @@ class AnimationKeyFrame {
 	}
 	
 	function parseCustomEases() {
-		trace("parse eases");
+		
 		eases = {};
 		for (ease in fast.node.resolve("tweens").nodes.resolve("CustomEase")) {
 			var targetStr:String = DataHelper.getAttribute(ease, "target");
@@ -79,6 +80,7 @@ class AnimationKeyFrame {
 		/**
 		 * Setup Matrix Data
 		 */
+		properties.x = properties.y = 0;
 		if (matrixData != null) {
 			matrix = new FlxMatrix();
 			
@@ -108,22 +110,18 @@ class AnimationKeyFrame {
 			var scaleY = Math.sqrt((b * b) + (d * d));
 
 			var sign = Math.atan(-c / a);
-			var rad  = Math.acos(a / scaleX);
-			var deg  = rad * FlxAngle.TO_DEG;
+			var rad = Math.acos(a / scaleX);
+			var deg = rad * FlxAngle.TO_DEG;
 
-			if (deg > 90 && sign > 0)
-			{
+			if (deg > 90 && sign > 0) {
 				rotation = (360 - deg) * FlxAngle.TO_RAD;
 			}
-			else if (deg < 90 && sign < 0)
-			{
+			else if (deg < 90 && sign < 0) {
 				rotation = (360 - deg) * FlxAngle.TO_RAD;
 			}
-			else
-			{
+			else {
 				rotation = rad;
 			}
-			trace(deg);
 			properties.angle = -deg;
 			properties.scaleX = scaleX;
 			properties.scaleY = scaleY;
@@ -169,6 +167,16 @@ class AnimationKeyFrame {
 			
 			properties.alpha = !colorData.has.resolve("alphaMultiplier") ? 1 : Std.parseFloat(colorData.att.resolve("alphaMultiplier"));
 			
+			/**
+			 * BUG WORKAROUND
+			 * if a FlxSpriteGroup is within another group 3 levels down
+			 * The alpha will never go back if it gets set to 0
+			 */
+			if (Std.is(target, FlxSpriteGroup) && properties.alpha == 0) {
+				properties.alpha = .01;
+			}
+			
+			
 			properties.colorTransform = colorTransform;
 		}
 		
@@ -189,20 +197,38 @@ class AnimationKeyFrame {
 				
 				//target.
 				//if float or int
-				if (targetProp != null && !Math.isNaN(targetProp)) {
+				if (targetProp != null && !(prop == "x" || prop == "y") && !Math.isNaN(targetProp)) {
 					Reflect.setProperty(target, prop, beginProp + ((endProp - beginProp) * t));
 				}
+				
+				var xpos = properties.x + ((toProps.x - properties.x) * t);
+				var ypos = properties.y + ((toProps.y - properties.y) * t);
+				
+				
+				/**
+				 * if the container is a FlxSpriteGroup
+				 * We need to offset the x and y positions to be relative to the group container
+				 */
+				if (layer.timeline != null && Std.is(layer.timeline.target, FlxSpriteGroup)) {
+					
+					xpos += Std.parseFloat(Std.string(Reflect.getProperty(layer.timeline.target, 'x')));
+					ypos += Std.parseFloat(Std.string(Reflect.getProperty(layer.timeline.target, 'y')));
+					
+					
+					//trace(Reflect.getProperty(layer.timeline.target, 'x'));
+				}
+				
+				target.setPosition(xpos, ypos);
 
 
 				switch (prop){
 					case "scaleX":
-					target.scale.x = beginProp + ((endProp - beginProp) * t);
+						target.scale.x = beginProp + ((endProp - beginProp) * t);
 					case "scaleY":
-					target.scale.y = beginProp + ((endProp - beginProp) * t);
-				case "angle":
-					trace(endProp);
-					target.angle = beginProp + ((endProp - beginProp) * t);
-					trace(target.angle + "!");
+						target.scale.y = beginProp + ((endProp - beginProp) * t);
+					case "angle":
+						target.angle = beginProp + ((endProp - beginProp) * t);
+					//trace(target.angle + "!");
 				}
 				
 				

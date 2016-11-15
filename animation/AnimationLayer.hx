@@ -1,11 +1,18 @@
 package animation;
+import flixel.FlxG;
 import flixel.FlxSprite;
+import flixel.group.FlxSpriteGroup;
 import flixel.math.FlxMath;
 import haxe.xml.Fast;
 import openfl.geom.ColorTransform;
 
 /**
- * ...
+ * TODO:
+ * 1. Add duration scaling
+ * 2. Add label name features
+ * 3. Filters
+ * 3. Rotation (Matrix)
+ * 4. Color Transform
  * @author Jonathan Snyder
  */
 class AnimationLayer {
@@ -33,6 +40,7 @@ class AnimationLayer {
 	public var frameLabels(default, null):Array<FrameLabel> = [];
 	
 	public var autoKill:Bool;
+	
 	
 	public function new(LayerData:Fast, Target:FlxSprite, ?Timeline:AnimationTimeline, ?AutoKill:Bool = true) {
 		
@@ -104,7 +112,7 @@ class AnimationLayer {
 		//if it's null, or if it exists but doesn't fit within the currentFrame, do a loop
 		_currentKeyFrame = null;
 		for (keyframe in keyFrames) {
-			if (FlxMath.inBounds(currentFrame, keyframe.index, keyframe.index + keyframe.duration)) {
+			if (FlxMath.inBounds(currentFrame - 1, keyframe.index, keyframe.index + keyframe.duration)) {
 				
 				_currentKeyFrame = keyframe;
 				break;
@@ -160,16 +168,64 @@ class AnimationLayer {
 		return _currentFrame;
 	}
 	
+	/**
+	 * Finds a frame number based off of a label string
+	 * @param	LabelStr
+	 * @return
+	 */
+	public function getFrameIndexByLabel(LabelStr:String):FrameLabel {
+		var label:FrameLabel = null;
+		
+		for (frame in frameLabels) {
+			if (frame.name == LabelStr) {
+				label = frame;
+				break;
+			}
+		}
+		
+		
+		return label;
+	}
+	
 	public function applyProperties() {
+		if (target == null) {
+			return;
+		}
+		
+		
 		//if there is no tween, set properties instead of traversing
 		if (!currentKeyFrame.hasTween) {
+
+
 			target.x = currentKeyFrame.properties.x;
 			target.y = currentKeyFrame.properties.y;
+			
+			
+			/**
+				 * if the container is a FlxSpriteGroup
+				 * We need to offset the x and y positions to be relative to the group container
+				 */
+			if (timeline != null && Std.is(timeline.target, FlxSpriteGroup)) {
+				var t:FlxSpriteGroup = cast timeline.target;
+
+				target.x += t.x;
+				target.y += t.y;
+			}
+			
+			
 			target.scale.x = currentKeyFrame.properties.scaleX;
 			target.scale.y = currentKeyFrame.properties.scaleY;
+			
+			//adjust hitbox
+			target.width = Math.abs(target.scale.x) * target.frameWidth;
+			target.height = Math.abs(target.scale.y) * target.frameHeight;
+			target.alpha = currentKeyFrame.properties.alpha;
+			target.drawFrame();
+			
+			
 		} else if (currentKeyFrame.eases == null) {
 			//traverse without tweens
-			currentKeyFrame.interpolateProperties(currentKeyFrame.properties, nextKeyFrame, currentKeyFrameInterpolation);
+			currentKeyFrame.interpolateProperties(currentKeyFrame.properties, nextKeyFrame.properties, currentKeyFrameInterpolation);
 			
 		} else {
 			//if there is all, do for all

@@ -1,30 +1,38 @@
 package animation;
 
+import animation.AnimationLayer.FrameLabel;
+import flash.errors.Error;
+import flixel.FlxBasic;
 import flixel.FlxG;
 import flixel.FlxSprite;
 import flixel.group.FlxGroup;
 import flixel.input.mouse.FlxMouseEventManager;
 import flixel.math.FlxMath;
 import flixel.tweens.FlxTween;
+import flixel.util.FlxDestroyUtil.IFlxDestroyable;
 import haxe.xml.Fast;
 
 
 /**
- * ...
+ * TODO:
+ * 1. Add duration scaling
+ * 2. Add label name features
  * @author Jonathan Snyder
  */
-class AnimationTimeline {
+class AnimationTimeline implements IFlxDestroyable {
 	
 	var xml:Xml;
 	var fast:Fast;
 	
-	public var target(default, null):FlxGroup;
+	public var target(default, null):Dynamic;
 	public var targetFields(default, null):Array<String>;
 	public var currentFrame(default, set):Int = 0;
 	public var totalFrames(default, null):Int = 0;
 	public var layers:Array<AnimationLayer>;
+	public var frameLabels(default, null):Array<FrameLabel> = [];
+	private var tween:FlxTween;
 
-	public function new(XmlString:String, Target:FlxGroup) {
+	public function new(XmlString:String, Target:Dynamic) {
 		
 		
 		target = Target;
@@ -61,9 +69,20 @@ class AnimationTimeline {
 				
 				//update total amount of frames
 				totalFrames = FlxMath.maxInt(totalFrames, animLayer.totalFrames);
-				
 			}
 			
+			
+			//find any frames with labels on them, and store them
+			for (frame in layer.node.resolve("frames").nodes.resolve("DOMFrame")) {
+				if (frame.has.resolve("name")) {
+					var label:FrameLabel = {
+						name: frame.att.resolve("name"),
+						index: Std.parseInt(frame.att.resolve("index"))
+					}
+					
+					frameLabels.push(label);
+				}
+			}
 			
 		}
 	}
@@ -87,10 +106,68 @@ class AnimationTimeline {
 		return layer;
 	}
 	
-	public function play(?OnComplete:TweenCallback) {
-		FlxTween.tween(this, {currentFrame: this.totalFrames}, this.totalFrames / 60, {
+	
+	/**
+	 * Finds a frame number based off of a label string
+	 * @param	LabelStr
+	 * @return
+	 */
+	public function getFrameIndexByLabel(LabelStr:String):FrameLabel {
+		var label:FrameLabel = null;
+		
+		for (frame in frameLabels) {
+			if (frame.name == LabelStr) {
+				label = frame;
+				break;
+			}
+		}
+		
+		
+		return label;
+	}
+	
+	public function play(?OnComplete:TweenCallback):FlxTween {
+		if (tween != null) {
+			tween.destroy();
+		}
+		
+		return tween = FlxTween.tween(this, {currentFrame: this.totalFrames}, this.totalFrames / FlxG.drawFramerate, {
 			onComplete: OnComplete
 		});
+
+	}
+	
+	
+	public function playToLabel(LabelStr:String, ?OnComplete:TweenCallback):FlxTween {
+		var frame:FrameLabel = getFrameIndexByLabel(LabelStr);
+		
+		if (frame == null) {
+			throw new Error("this frame " + LabelStr + " does not exist");
+		} else {
+			if (tween != null && tween.active) {
+				tween.cancel();
+			}
+			
+			
+		}
+		
+		return tween = FlxTween.tween(this, {
+			currentFrame: (frame.index + 1)
+		}, (frame.index - (currentFrame - 1)) / FlxG.updateFramerate, {
+										  onComplete: OnComplete
+									  });
+	}
+	
+	
+	public function stop() {
+		tween.cancel();
+	}
+	
+	
+	/* INTERFACE flixel.util.FlxDestroyUtil.IFlxDestroyable */
+	public function destroy():Void {
+		tween.cancel();
+		
 	}
 	
 	
